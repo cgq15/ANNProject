@@ -23,7 +23,7 @@ class RNN(object):
                  learning_rate=0.001,
                  max_gradient_norm=5.0
                  ):
-        # todo: implement placeholders
+        
         self.texts1 = tf.placeholder(tf.string, [batch_size, None], name='texts1')
         self.texts2 = tf.placeholder(tf.string, [batch_size, None], name='texts2')  # shape: batch*len
         self.texts_length = tf.placeholder(tf.int32, [None], name='texts_length')  # shape: batch
@@ -76,11 +76,10 @@ class RNN(object):
 
         out_s1, state_s1 = dynamic_rnn(self.lstm_s, self.embed_input1, self.texts_length, dtype=tf.float32, scope='rnn')
         out_s2, state_s2 = dynamic_rnn(self.lstm_s, self.embed_input2, self.texts_length, dtype=tf.float32, scope='rnn')
-        #out_s1, state_s1 = static_rnn(self.lstm_s, self.embed_input1, self.texts_length, dtype=tf.float32)
-        #out_s2, state_s2 = static_rnn(self.lstm_s, self.embed_input2, self.texts_length, dtype=tf.float32)
+        
         self.h_s1 = out_s1
         self.h_s2 = out_s2
-
+        #预先计算W_s*h
         reshaped_s1 = tf.reshape(self.h_s1, [-1, self.num_units])
         reshaped_s2 = tf.reshape(self.h_s2, [-1, self.num_units])
         with tf.variable_scope('Attn_'):
@@ -107,9 +106,9 @@ class RNN(object):
                                    initializer=self._initializer, name='b_fc')
         logits = tf.matmul(state_r.h, w_fc)+ b_fc
         
-        #logits = tf.layers.dense(outputs, num_labels)
+        
 
-        # todo: implement unfinished networks
+        
 
         self.loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=self.labels, logits=logits), name='loss')
