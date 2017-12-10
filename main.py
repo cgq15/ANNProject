@@ -4,7 +4,7 @@ from tensorflow.python.framework import constant_op
 from read_file import deserialize
 import sys
 import json
-from model import RNN, _START_VOCAB
+from modelsim import RNN, _START_VOCAB
 import os
 import time
 import random
@@ -15,9 +15,9 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 tf.app.flags.DEFINE_boolean("is_train", True, "Set to False to inference.")
 tf.app.flags.DEFINE_boolean(
     "read_graph", False, "Set to False to build graph.")
-tf.app.flags.DEFINE_integer("symbols", 35397, "vocabulary size.")
+tf.app.flags.DEFINE_integer("symbols", 35939, "vocabulary size.")
 tf.app.flags.DEFINE_integer("labels", 3, "Number of labels.")
-tf.app.flags.DEFINE_integer("epoch", 5, "Number of epoch.")
+tf.app.flags.DEFINE_integer("epoch", 20, "Number of epoch.")
 tf.app.flags.DEFINE_integer("embed_units", 300, "Size of word embedding.")
 tf.app.flags.DEFINE_integer("units", 512, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("layers", 1, "Number of layers in the model.")
@@ -46,6 +46,7 @@ def build_vocab(path, data):
         vocab = f.readlines()
         for i in vocab:
             vocab_list.append(i.strip())
+    vocab_list = _START_VOCAB + vocab_list
     if len(vocab_list) > FLAGS.symbols:
         vocab_list = vocab_list[:FLAGS.symbols]
     else:
@@ -78,7 +79,7 @@ def train(model, sess, dataset):
         st, ed = ed, ed + FLAGS.batch_size if ed + \
             FLAGS.batch_size < len(dataset) else len(dataset)
         batch_data = gen_batch_data(dataset[st:ed])
-        #print batch_data['texts2']
+        #print batch_data['texts2'][0]
         outputs = model.train_step(sess, batch_data, summary=gen_summary)
         if gen_summary:
             summary = outputs[-1]
@@ -125,12 +126,13 @@ with tf.Session(config=config) as sess:
     if FLAGS.is_train:
         print(FLAGS.__flags)
         
-        data_train = deserialize(os.path.join(FLAGS.data_dir, 'snli_1.0_train.bin'))[0:10240]
-        data_dev = deserialize(os.path.join(FLAGS.data_dir, 'snli_1.0_dev.bin'))[0:256]
-        data_test = deserialize(os.path.join(FLAGS.data_dir, 'snli_1.0_test.bin'))[0:256]
+        data_train = deserialize(os.path.join(FLAGS.data_dir, 'snli_1.0_train.bin'))
+        data_dev = deserialize(os.path.join(FLAGS.data_dir, 'snli_1.0_dev.bin'))
+        data_test = deserialize(os.path.join(FLAGS.data_dir, 'snli_1.0_test.bin'))
         vocab = build_vocab(FLAGS.data_dir, 'vocab_list.txt')
+        print vocab[0]
+        embed = np.loadtxt('data/vec.txt').astype(np.float32)
         
-        embed = np.loadtxt('data/vector.txt').astype(np.float32)
         model = RNN(
             FLAGS.symbols,
             FLAGS.embed_units,
@@ -138,7 +140,7 @@ with tf.Session(config=config) as sess:
             FLAGS.labels,
             FLAGS.batch_size,
             embed,
-            learning_rate=0.0001)
+            learning_rate=0.01)
         if FLAGS.log_parameters:
             model.print_parameters()
 
