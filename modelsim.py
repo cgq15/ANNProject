@@ -21,13 +21,15 @@ class RNN(object):
                  batch_size,
                  embed,
                  learning_rate=0.001,
-                 max_gradient_norm=5.0
+                 max_gradient_norm=5.0,
+                 learning_rate_decay_factor=0.9
                  ):
-        
+        # todo: implement placeholders
         self.texts1 = tf.placeholder(tf.string, [batch_size, None], name='texts1')
         self.texts2 = tf.placeholder(tf.string, [batch_size, None], name='texts2')  # shape: batch*len
-        self.texts_length = tf.placeholder(tf.int32, [None], name='texts_length')  # shape: batch
-        self.len = tf.constant(1.0, shape=[batch_size])
+        self.texts_length1 = tf.placeholder(tf.int32, [None], name='texts_length1')  # shape: batch
+        self.texts_length2 = tf.placeholder(tf.int32, [None], name='texts_length2') 
+        self.max_length = tf.placeholder(tf.int32, name='max_length')
         self.labels = tf.placeholder(
             tf.int64, [None], name='labels')  # shape: batch
         self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
@@ -49,7 +51,7 @@ class RNN(object):
         self.global_step = tf.Variable(0, trainable=False)
         self.epoch = tf.Variable(0, trainable=False)
         self.epoch_add_op = self.epoch.assign(self.epoch + 1)
-
+        self.learning_rate_decay_op = self.learning_rate.assign(self.learning_rate * learning_rate_decay_factor)
         self.index_input1 = self.symbol2index.lookup(self.texts1)   # batch*len
         self.index_input2 = self.symbol2index.lookup(self.texts2)
 
@@ -69,17 +71,17 @@ class RNN(object):
             self.embed, self.index_input2)
 
         with tf.variable_scope('lstm_s'):
-            self.lstm_s = rnn_cell.BasicLSTMCell(num_units=num_units, forget_bias=0)
+            self.lstm_s = tf.contrib.rnn.LSTMCell(num_units=num_units, initializer=tf.orthogonal_initializer ,forget_bias=0)
         
         with tf.variable_scope('lstm_r'):
-            self.lstm_r = rnn_cell.BasicLSTMCell(num_units=num_units, forget_bias=0)
+            self.lstm_r = tf.contrib.rnn.LSTMCell(num_units=num_units, initializer=tf.orthogonal_initializer, forget_bias=0)
 
-        out_s1, state_s1 = dynamic_rnn(self.lstm_s, self.embed_input1, self.texts_length, dtype=tf.float32, scope='rnn')
-        out_s2, state_s2 = dynamic_rnn(self.lstm_s, self.embed_input2, self.texts_length, dtype=tf.float32, scope='rnn')
+        out_s1, state_s1 = dynamic_rnn(self.lstm_s, self.embed_input1, self.texts_length1, dtype=tf.float32, scope='rnn')
+        out_s2, state_s2 = dynamic_rnn(self.lstm_s, self.embed_input2, self.texts_length2, dtype=tf.float32, scope='rnn')
         
         self.h_s1 = out_s1
         self.h_s2 = out_s2
-        #预先计算W_s*h
+
         reshaped_s1 = tf.reshape(self.h_s1, [-1, self.num_units])
         reshaped_s2 = tf.reshape(self.h_s2, [-1, self.num_units])
         with tf.variable_scope('Attn_'):
@@ -91,11 +93,9 @@ class RNN(object):
         self.s_2 = tf.transpose(tf.reshape(self.s_2, [self.batch_size, -1, self.num_units]), [1,2,0])
         i = tf.constant(0)
 
-        self.length = self.texts_length[0]
-        print self.length 
         state_r = self.lstm_r.zero_state(batch_size=batch_size, dtype=tf.float32)
         
-        def c(t, sr): return tf.less(t, self.length)
+        def c(t, sr): return tf.less(t, self.max_length)
         def b(t, sr): return self.attention(t, sr)
         i, state_r = tf.while_loop(cond=c, body=b, loop_vars=(i, state_r))
         
@@ -106,9 +106,9 @@ class RNN(object):
                                    initializer=self._initializer, name='b_fc')
         logits = tf.matmul(state_r.h, w_fc)+ b_fc
         
-        
+        #logits = tf.layers.dense(outputs, num_labels)
 
-        
+        # todo: implement unfinished networks
 
         self.loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=self.labels, logits=logits), name='loss')
@@ -189,7 +189,9 @@ class RNN(object):
     def train_step(self, session, data, summary=False):
         input_feed = {self.texts1: data['texts1'],
                       self.texts2: data['texts2'],
-                      self.texts_length: data['texts_length'],
+                      self.texts_length1: data['texts_length1'],
+                      self.texts_length2: data['texts_length2'],
+                      self.max_length: data['max_length'],
                       self.labels: data['labels'],
                       self.keep_prob: data['keep_prob']}
         output_feed = [self.loss, self.accuracy, #self.train_op]
