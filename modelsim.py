@@ -27,11 +27,11 @@ class RNN(object):
         # todo: implement placeholders
         self.texts1 = tf.placeholder(tf.string, [batch_size, None], name='texts1')
         self.texts2 = tf.placeholder(tf.string, [batch_size, None], name='texts2')  # shape: batch*len
-        self.texts_length1 = tf.placeholder(tf.int32, [None], name='texts_length1')  # shape: batch
-        self.texts_length2 = tf.placeholder(tf.int32, [None], name='texts_length2') 
+        self.texts_length1 = tf.placeholder(tf.int32, [batch_size], name='texts_length1')  # shape: batch
+        self.texts_length2 = tf.placeholder(tf.int32, [batch_size], name='texts_length2') 
         self.max_length = tf.placeholder(tf.int32, name='max_length')
         self.labels = tf.placeholder(
-            tf.int64, [None], name='labels')  # shape: batch
+            tf.int64, [batch_size], name='labels')  # shape: batch
         self.keep_prob = tf.placeholder(tf.float32, name='keep_prob')
         self.embed_units = num_embed_units
         self.num_units = num_units
@@ -54,7 +54,9 @@ class RNN(object):
         self.learning_rate_decay_op = self.learning_rate.assign(self.learning_rate * learning_rate_decay_factor)
         self.index_input1 = self.symbol2index.lookup(self.texts1)   # batch*len
         self.index_input2 = self.symbol2index.lookup(self.texts2)
-
+        self.long_length = tf.maximum(self.texts_length1, self.texts_length2)
+        print self.long_length.get_shape()
+        self.mask_table = tf.sequence_mask(self.long_length, dtype=tf.float32)
         # build the embedding table (index to vector)
         if embed is None:
             # initialize the embedding randomly
@@ -152,35 +154,38 @@ class RNN(object):
         e1_tj = tf.tanh( self.s_1 + tf.transpose( tf.matmul(self.h_s2[:,t,:], W_o)+tf.matmul(hr.h, W_a) ) )
         e2_tj = tf.tanh( self.s_2 + tf.transpose( tf.matmul(self.h_s1[:,t,:], W_o)+tf.matmul(hr.h, W_a) ) )
         print e1_tj.get_shape()
-
+        #(max_len, num_units, batch_size)
         e1_tj = tf.matmul(tf.reshape(tf.transpose(e1_tj,[2,0,1]),[-1, self.num_units]), W_e)
         e2_tj = tf.matmul(tf.reshape(tf.transpose(e2_tj,[2,0,1]),[-1, self.num_units]), W_e)
+        #(max_len*batch_size, 1)
         print e1_tj.get_shape()
-        e1_tj = tf.reshape(e1_tj, [-1, self.batch_size])
-        e2_tj = tf.reshape(e2_tj, [-1, self.batch_size])
+        e1_tj = tf.transpose(tf.reshape(e1_tj, [self.batch_size, -1]))
+        e2_tj = tf.transpose(tf.reshape(e2_tj, [self.batch_size, -1]))
+        #(max_len, batch_size)
         print e1_tj.get_shape()
-        alpha1_tj = tf.nn.softmax(e1_tj, dim=0)
-        alpha2_tj = tf.nn.softmax(e2_tj, dim=0)
-        print alpha1_tj.get_shape()
 
+        alpha1_tj = tf.exp(e1_tj)*tf.transpose(self.mask_table)
+        alpha2_tj = tf.exp(e2_tj)*tf.transpose(self.mask_table)
+        alpha1_tj = alpha1_tj / tf.reduce_sum(alpha1_tj, 0)
+        alpha1_tj = alpha2_tj / tf.reduce_sum(alpha2_tj, 0)
+        print alpha1_tj.get_shape()
+        #(max_len, batch_size)
         a1tj = alpha1_tj*tf.transpose(self.h_s1,[2,1,0])
         a2tj = alpha2_tj*tf.transpose(self.h_s2,[2,1,0])
         print a1tj.get_shape()
-        a1tj = tf.reduce_sum(tf.transpose(a1tj,[2,1,0]), 1)
-        a2tj = tf.reduce_sum(tf.transpose(a2tj,[2,1,0]), 1)
+        #(num_units, max_len, batch_size)
+        a1tj = tf.transpose(tf.reduce_sum(a1tj, 1))
+        a2tj = tf.transpose(tf.reduce_sum(a2tj, 1))
         print a1tj.get_shape()
+        #(batch_size, num_units)
         r_t = tf.concat([a1tj, a2tj],1)
         print r_t.get_shape()
+        #(batch_size, 2*num_units)
         with tf.variable_scope('lstm_r'):
             out_r, hr = self.lstm_r(inputs=r_t, state=hr)
         t = tf.add(t,1)        
         return t, hr
         
-
-    def _length(self, sequence):
-        mask = tf.sign(tf.abs(sequence))
-        length = tf.reduce_sum(mask, axis=-1)
-        return length
 
     def print_parameters(self):
         for item in self.params:
