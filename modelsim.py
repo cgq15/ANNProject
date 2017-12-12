@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.ops.nn import dynamic_rnn, static_rnn
+from tensorflow.python.ops.nn import dynamic_rnn
 from tensorflow.contrib.lookup.lookup_ops import MutableHashTable
 from tensorflow.contrib.layers.python.layers import layers
 from tensorflow.python.ops.nn import rnn_cell
@@ -159,26 +159,26 @@ class RNN(object):
         e2_tj = tf.matmul(tf.reshape(tf.transpose(e2_tj,[2,0,1]),[-1, self.num_units]), W_e)
         #(max_len*batch_size, 1)
         print e1_tj.get_shape()
-        e1_tj = tf.transpose(tf.reshape(e1_tj, [self.batch_size, -1]))
-        e2_tj = tf.transpose(tf.reshape(e2_tj, [self.batch_size, -1]))
-        #(max_len, batch_size)
+        e1_tj = tf.reshape(e1_tj, [self.batch_size, -1])
+        e2_tj = tf.reshape(e2_tj, [self.batch_size, -1])
+        #(batch_size, max_len)
         print e1_tj.get_shape()
 
-        alpha1_tj = tf.exp(e1_tj)*tf.transpose(self.mask_table)
-        alpha2_tj = tf.exp(e2_tj)*tf.transpose(self.mask_table)
-        alpha1_tj = alpha1_tj / tf.reduce_sum(alpha1_tj, 0)
-        alpha1_tj = alpha2_tj / tf.reduce_sum(alpha2_tj, 0)
+        alpha1_tj = tf.exp(e1_tj)*self.mask_table
+        alpha2_tj = tf.exp(e2_tj)*self.mask_table
+        alpha1_tj = tf.transpose(alpha1_tj) / tf.reduce_sum(alpha1_tj, 1)
+        alpha2_tj = tf.transpose(alpha2_tj) / tf.reduce_sum(alpha2_tj, 1)
         print alpha1_tj.get_shape()
         #(max_len, batch_size)
-        a1tj = alpha1_tj*tf.transpose(self.h_s1,[2,1,0])
-        a2tj = alpha2_tj*tf.transpose(self.h_s2,[2,1,0])
+        a1tj = alpha1_tj*tf.transpose(self.h_s1, [2,1,0])
+        a2tj = alpha2_tj*tf.transpose(self.h_s2, [2,1,0])
         print a1tj.get_shape()
         #(num_units, max_len, batch_size)
-        a1tj = tf.transpose(tf.reduce_sum(a1tj, 1))
-        a2tj = tf.transpose(tf.reduce_sum(a2tj, 1))
+        a1tj = tf.reduce_sum(a1tj, 1)
+        a2tj = tf.reduce_sum(a2tj, 1)
         print a1tj.get_shape()
-        #(batch_size, num_units)
-        r_t = tf.concat([a1tj, a2tj],1)
+        #(num_units, batch_size)
+        r_t = tf.transpose(tf.concat([a1tj, a2tj], 0))
         print r_t.get_shape()
         #(batch_size, 2*num_units)
         with tf.variable_scope('lstm_r'):

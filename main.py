@@ -17,7 +17,7 @@ tf.app.flags.DEFINE_boolean(
     "read_graph", False, "Set to False to build graph.")
 tf.app.flags.DEFINE_integer("symbols", 35939, "vocabulary size.")
 tf.app.flags.DEFINE_integer("labels", 3, "Number of labels.")
-tf.app.flags.DEFINE_integer("epoch", 20, "Number of epoch.")
+tf.app.flags.DEFINE_integer("epoch", 30, "Number of epoch.")
 tf.app.flags.DEFINE_integer("embed_units", 300, "Size of word embedding.")
 tf.app.flags.DEFINE_integer("units", 512, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("layers", 1, "Number of layers in the model.")
